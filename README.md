@@ -1,89 +1,140 @@
-# CycleAvatar
+# CycleAvatar 🏋️‍♂️
 
-A smart fitness tracking app with recovery-based avatar growth system.
+**Smart Workout Tracking App with Intelligent Fatigue & Recovery System**
 
-## Project Structure
+CycleAvatar is a Flutter-based workout tracking application that uses advanced fatigue modeling and recovery algorithms to optimize your training schedule and prevent overtraining.
 
-This project follows Clean Architecture principles with the following structure:
+## ✨ Features
 
+### 🎯 Core Functionality
+- **Smart Fatigue Tracking**: Real-time muscle group fatigue calculation based on RPE, volume, and intensity
+- **Recovery System**: Automatic recovery tracking with visual indicators (Ready/Warm/Fatigued)
+- **Quick Workout Logging**: Fast set entry with RPE tracking and previous value auto-loading
+- **Template System**: Pre-built workout templates (Push/Pull/Leg Day) for quick session starts
+- **Avatar Progression**: Gamified leveling system based on training consistency and progression
+
+### 📊 Advanced Analytics
+- **Muscle Group Status**: Visual fatigue indicators with percentage-based recovery tracking
+- **Workout History**: Comprehensive session tracking with volume and intensity metrics
+- **Progress Visualization**: Circular progress bars showing real-time recovery status
+
+### 🌍 User Experience
+- **Multi-language Support**: English and Japanese localization
+- **Responsive Design**: Optimized for mobile devices
+- **Accessibility**: Screen reader support and keyboard navigation
+
+## 🚀 Current Status
+
+### ✅ Implemented Features
+- [x] Basic workout logging with RPE tracking
+- [x] Fatigue calculation system (80% threshold for "Fatigued" status)
+- [x] Real-time recovery system (10 points per 30 seconds)
+- [x] Template-based workouts
+- [x] Multi-language support (EN/JP)
+- [x] Avatar leveling system
+- [x] Workout history tracking
+- [x] Visual fatigue indicators with circular progress bars
+
+### 🔄 In Development
+- [ ] Enhanced recovery algorithms with muscle group-specific rates
+- [ ] Notification system for recovery alerts
+- [ ] Data export functionality
+- [ ] Advanced workout analytics
+- [ ] Cloud synchronization
+
+## 🏗️ Architecture
+
+### Tech Stack
+- **Frontend**: Flutter (Dart)
+- **State Management**: Riverpod
+- **Local Storage**: SQLite
+- **Backend**: FastAPI (Python) - *In Development*
+- **Database**: PostgreSQL - *In Development*
+
+### Project Structure
 ```
 lib/
-├── core/                           # Core functionality
-│   ├── app/                       # App configuration
-│   │   └── app_router.dart        # GoRouter configuration
-│   ├── constants/                 # App constants
-│   │   └── muscle_group_constants.dart
-│   ├── l10n/                      # Localization
-│   │   └── app_localizations.dart
-│   ├── providers/                 # Global providers
-│   │   └── providers.dart
-│   └── theme/                     # App theming
-│       └── app_theme.dart
-├── data/                          # Data layer
-│   ├── datasources/               # Data sources
-│   │   └── local/
-│   │       └── database_helper.dart
-│   └── repositories/              # Repository implementations
-│       └── user_repository_impl.dart
-├── domain/                        # Domain layer
-│   └── entities/                  # Domain entities
-│       ├── exercise.dart
-│       ├── muscle_group.dart
-│       ├── user.dart
-│       └── workout_session.dart
-├── presentation/                  # Presentation layer
-│   └── pages/                     # App pages
-│       ├── avatar/
-│       ├── history/
-│       ├── home/
-│       ├── settings/
-│       └── workout/
-└── l10n/                          # Localization files
-    ├── app_en.arb
-    └── app_ja.arb
+├── core/                 # Core utilities and services
+├── data/                 # Data layer (repositories, services)
+├── domain/               # Business logic and entities
+├── presentation/         # UI layer (pages, widgets, providers)
+└── main_simple.dart      # Current simplified implementation
 ```
 
-## Features
+## 🔧 Development Setup
 
-- **Offline-first architecture** with SQLite local storage
-- **Multi-language support** (English/Japanese)
-- **Clean Architecture** with separation of concerns
-- **State management** using Riverpod
-- **Material Design 3** theming
-- **Cross-platform** (Android/iOS)
+### Prerequisites
+- Flutter SDK (>=3.0.0)
+- Dart SDK (>=3.0.0)
 
-## Key Dependencies
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/Rui-moment/cycle-avatar.git
+cd cycle-avatar
 
-- `flutter_riverpod`: State management
-- `sqflite`: Local database
-- `go_router`: Navigation
-- `dio`: HTTP client
-- `freezed`: Immutable data classes
-- `json_annotation`: JSON serialization
+# Install dependencies
+flutter pub get
 
-## Getting Started
+# Run the app
+flutter run lib/main_simple.dart
+```
 
-1. Ensure Flutter SDK is installed
-2. Run `flutter pub get` to install dependencies
-3. Run `flutter pub run build_runner build` to generate code
-4. Run `flutter run` to start the app
+## 📈 Fatigue & Recovery System
 
-## Architecture Layers
+### Fatigue Calculation
+```
+Fatigue Intensity = Sets × (Average RPE ÷ 10) × 25
+```
 
-### Domain Layer
-Contains business entities and core business logic. Independent of external frameworks.
+### Recovery Thresholds
+- **Ready (Green)**: 0-39% fatigue
+- **Warm (Orange)**: 40-79% fatigue  
+- **Fatigued (Red)**: 80-100% fatigue
 
-### Data Layer
-Handles data persistence and external API communication. Implements repository interfaces defined in the domain layer.
+### Recovery Rate
+- **Base Recovery**: 10 points per 30 seconds
+- **Full Recovery Time**: ~5 minutes (100% → 0%)
 
-### Presentation Layer
-Contains UI components, pages, and state management. Depends on domain layer through dependency injection.
+## 🎮 Usage Example
 
-## Development Guidelines
+1. **Start Workout**: Select a template or create custom workout
+2. **Log Sets**: Enter weight, reps, and RPE for each set
+3. **Track Fatigue**: Watch real-time fatigue accumulation
+4. **Monitor Recovery**: Check muscle group status on home screen
+5. **Plan Next Session**: Use recovery indicators to optimize training
 
-- Follow Clean Architecture principles
-- Use Riverpod for state management
-- Implement proper error handling
-- Write unit tests for business logic
-- Use Freezed for immutable data classes
-- Follow Flutter/Dart style guidelines
+## 🤝 Contributing
+
+We welcome contributions! Please see our development workflow:
+
+1. **Main Branch**: Stable releases
+2. **Feature Branches**: New development (e.g., `feature/enhanced-recovery-system`)
+3. **Pull Requests**: All changes go through PR review
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔮 Roadmap
+
+### Phase 1: Core Enhancement (Current)
+- Enhanced recovery algorithms
+- Notification system
+- Data export/import
+
+### Phase 2: Advanced Features
+- Cloud synchronization
+- Social features
+- Advanced analytics dashboard
+
+### Phase 3: AI Integration
+- Personalized training recommendations
+- Injury prevention algorithms
+- Adaptive recovery modeling
+
+---
+
+**Built with ❤️ for the fitness community**
+
+[Report Issues](https://github.com/Rui-moment/cycle-avatar/issues) | [Feature Requests](https://github.com/Rui-moment/cycle-avatar/discussions)
