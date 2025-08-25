@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 import '../../domain/entities/notification_preferences.dart';
 import '../../domain/entities/notification.dart';
 import '../../domain/services/notification_manager.dart';

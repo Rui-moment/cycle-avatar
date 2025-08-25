@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:sqflite/sqflite.dart';
+import 'dart:io' show File, Directory;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:sqflite_common/sqlite_api.dart';
 import 'package:logger/logger.dart';
 import 'package:path/path.dart';
 import 'database_config.dart';
@@ -189,32 +190,31 @@ class DatabaseHealthMonitor {
   }
   
   /// Check available disk space
-  static Future<void> _checkDiskSpace(
+static Future<void> _checkDiskSpace(
     Database db,
     List<String> issues,
     Map<String, dynamic> metrics,
   ) async {
+    if (kIsWeb) {
+      // IndexedDB handles storage; disk space checks not applicable.
+      return;
+    }
     try {
       final databasesPath = await getDatabasesPath();
       final directory = Directory(databasesPath);
-      
+
       if (await directory.exists()) {
-        final stat = directory.statSync();
         metrics['database_directory'] = databasesPath;
-        
+
         // Get database file size
         final dbFile = File(join(databasesPath, DatabaseConfig.databaseName));
         if (await dbFile.exists()) {
           final dbSize = await dbFile.length();
           metrics['database_file_size_bytes'] = dbSize;
-          
-          // Check if we have enough free space (at least 10x database size)
-          final requiredSpace = dbSize * 10;
-          
-          // Note: Getting actual free space is platform-specific
-          // This is a simplified check
-          if (dbSize > 100 * 1024 * 1024) { // 100MB
-            _logger.w('Database file is large (${(dbSize / 1024 / 1024).toStringAsFixed(1)}MB)');
+
+          // Warn if database grows too large
+          if (dbSize > 100 * 1024 * 1024) {
+            _logger.w('Database file is large ${(dbSize / 1024 / 1024).toStringAsFixed(1)}MB');
           }
         }
       }

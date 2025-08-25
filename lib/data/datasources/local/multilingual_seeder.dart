@@ -1,5 +1,5 @@
 import 'package:logger/logger.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 
 import '../../../domain/entities/exercise.dart';
 import '../../../domain/entities/muscle_group.dart';
@@ -163,13 +163,13 @@ class MultilingualSeeder {
     try {
       final db = await _databaseHelper.database;
       
-      final muscleGroupCount = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM muscle_groups'),
-      ) ?? 0;
-      
-      final exerciseCount = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM exercises'),
-      ) ?? 0;
+      final muscleGroupCount =
+          (await db.rawQuery('SELECT COUNT(*) as count FROM muscle_groups'))
+              .first['count'] as int;
+
+      final exerciseCount =
+          (await db.rawQuery('SELECT COUNT(*) as count FROM exercises'))
+              .first['count'] as int;
       
       final needsSeeding = muscleGroupCount == 0 || exerciseCount == 0;
       _logger.d('Needs seeding: $needsSeeding (muscle groups: $muscleGroupCount, exercises: $exerciseCount)');

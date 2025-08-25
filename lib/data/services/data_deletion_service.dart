@@ -1,7 +1,8 @@
-import 'dart:io';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../domain/entities/user.dart';
 import '../repositories/user_repository.dart';
@@ -299,10 +300,11 @@ class DataDeletionService {
 
   /// Deletes the database file
   Future<void> _deleteDatabaseFile() async {
+    if (kIsWeb) return;
     try {
       final databasesPath = await getDatabasesPath();
       final dbPath = '$databasesPath/cycleavatar.db';
-      final dbFile = File(dbPath);
+      final dbFile = io.File(dbPath);
       
       if (await dbFile.exists()) {
         await dbFile.delete();
@@ -310,11 +312,11 @@ class DataDeletionService {
       }
 
       // Also delete any backup or temporary database files
-      final directory = Directory(databasesPath);
+      final directory = io.Directory(databasesPath);
       final files = await directory.list().toList();
       
       for (final file in files) {
-        if (file is File && file.path.contains('cycleavatar')) {
+        if (file is io.File && file.path.contains('cycleavatar')) {
           await file.delete();
           _logger.d('Database-related file deleted: ${file.path}');
         }
@@ -326,9 +328,10 @@ class DataDeletionService {
 
   /// Clears application cache and temporary files
   Future<void> _clearApplicationCache() async {
+    if (kIsWeb) return;
     try {
       // Clear temporary directory
-      final tempDir = await getTemporaryDirectory();
+      final io.Directory tempDir = await getTemporaryDirectory();
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
         _logger.d('Temporary directory cleared');
@@ -336,7 +339,7 @@ class DataDeletionService {
 
       // Clear application cache directory
       try {
-        final cacheDir = await getApplicationCacheDirectory();
+        final io.Directory cacheDir = await getApplicationCacheDirectory();
         if (await cacheDir.exists()) {
           await cacheDir.delete(recursive: true);
           _logger.d('Cache directory cleared');
@@ -347,11 +350,11 @@ class DataDeletionService {
 
       // Clear any export files in documents directory
       try {
-        final documentsDir = await getApplicationDocumentsDirectory();
+        final io.Directory documentsDir = await getApplicationDocumentsDirectory();
         final files = await documentsDir.list().toList();
         
         for (final file in files) {
-          if (file is File && file.path.contains('cycleavatar_export')) {
+          if (file is io.File && file.path.contains('cycleavatar_export')) {
             await file.delete();
             _logger.d('Export file deleted: ${file.path}');
           }
