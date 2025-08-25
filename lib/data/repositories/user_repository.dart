@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 import 'package:logger/logger.dart';
 
 import '../../domain/entities/user.dart';
