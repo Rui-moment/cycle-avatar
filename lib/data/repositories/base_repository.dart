@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 
 /// Base repository interface defining common CRUD operations
 /// All repositories should implement this interface for consistency

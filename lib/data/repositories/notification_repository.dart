@@ -1,4 +1,4 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 import 'package:logger/logger.dart';
 import '../../domain/entities/notification.dart';
 import '../datasources/local/database_helper.dart';

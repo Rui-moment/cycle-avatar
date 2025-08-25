@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:logger/logger.dart';
 import '../../../domain/entities/sync_entity.dart';
 import 'sync_manager.dart';
