@@ -38,8 +38,8 @@ enum ReadinessLevel {
 
   /// Get readiness level from fatigue score
   static ReadinessLevel fromFatigueScore(double fatigueScore) {
-    if (fatigueScore < 30) return ReadinessLevel.ready;
-    if (fatigueScore < 70) return ReadinessLevel.warm;
+    if (fatigueScore < 40) return ReadinessLevel.ready;
+    if (fatigueScore < 80) return ReadinessLevel.warm;
     return ReadinessLevel.fatigued;
   }
 }

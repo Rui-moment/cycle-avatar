@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'presentation/widgets/avatar/anime_avatar_widget.dart';
+import 'domain/entities/recovery_state.dart';
+import 'domain/entities/enums.dart';
 
 // Enums
 enum MuscleGroupState { ready, warm, fatigued }
@@ -124,6 +127,46 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     _initializeTemplates();
     // Start recovery timer
     _startRecoveryTimer();
+  }
+
+  /// Convert current muscle group states to RecoveryState format for avatar
+  Map<String, RecoveryState> getRecoveryStatesForAvatar() {
+    final recoveryStates = <String, RecoveryState>{};
+    
+    // Map our muscle groups to avatar muscle groups
+    final muscleGroupMapping = {
+      'Chest': ['chest'],
+      'Back': ['back'],
+      'Legs': ['quadriceps', 'hamstrings', 'calves'],
+      'Shoulders': ['shoulders'],
+      'Arms': ['biceps', 'triceps'],
+    };
+    
+    print('DEBUG: Converting fatigue states for avatar:');
+    for (final entry in state.muscleGroupFatigue.entries) {
+      final ourMuscleGroup = entry.key;
+      final fatigueLevel = entry.value;
+      final readinessLevel = ReadinessLevel.fromFatigueScore(fatigueLevel);
+      
+      print('DEBUG: $ourMuscleGroup - Fatigue: ${fatigueLevel.toStringAsFixed(1)}, Level: ${readinessLevel.name}');
+      
+      // Map to avatar muscle groups
+      final avatarMuscleGroups = muscleGroupMapping[ourMuscleGroup] ?? [ourMuscleGroup.toLowerCase()];
+      
+      for (final avatarMuscleGroup in avatarMuscleGroups) {
+        recoveryStates[avatarMuscleGroup] = RecoveryState(
+          id: 'recovery_${avatarMuscleGroup}',
+          muscleGroupId: avatarMuscleGroup,
+          currentFatigue: fatigueLevel,
+          lastUpdated: DateTime.now(),
+          readinessLevel: readinessLevel,
+          initialFatigue: 100.0, // Assume max fatigue for percentage calculation
+        );
+      }
+    }
+    
+    print('DEBUG: Avatar recovery states: ${recoveryStates.keys.toList()}');
+    return recoveryStates;
   }
 
   void _initializeTemplates() {
@@ -655,7 +698,7 @@ class HomeTab extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final workoutData = ref.watch(workoutDataProvider);
     
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -677,6 +720,35 @@ class HomeTab extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(l10n.readyToTrain),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // アニメアバター表示カード
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'Your Avatar',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  // アニメアバターウィジェット
+                  SizedBox(
+                    height: 200,
+                    child: AnimeAvatarWidget(
+                      recoveryStates: ref.read(workoutDataProvider.notifier).getRecoveryStatesForAvatar(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Level ${workoutData.avatarLevel.toStringAsFixed(1)}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
                 ],
               ),
             ),

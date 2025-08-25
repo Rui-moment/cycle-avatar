@@ -177,13 +177,22 @@ class _AnimeAvatarPainter extends CustomPainter {
         .map((g) => recoveryStates[g])
         .whereType<RecoveryState>()
         .toList();
+    
+    print('DEBUG Avatar: Checking groups $groups, found ${states.length} states');
+    for (final state in states) {
+      print('DEBUG Avatar: ${state.muscleGroupId} - Fatigue: ${state.currentFatigue}, Level: ${state.readinessLevel.name}');
+    }
+    
     if (states.isEmpty) return Colors.grey.shade300;
     if (states.any((s) => s.readinessLevel == ReadinessLevel.fatigued)) {
+      print('DEBUG Avatar: Groups $groups -> RED (fatigued)');
       return Colors.red.shade300;
     }
     if (states.any((s) => s.readinessLevel == ReadinessLevel.warm)) {
+      print('DEBUG Avatar: Groups $groups -> ORANGE (warm)');
       return Colors.orange.shade300;
     }
+    print('DEBUG Avatar: Groups $groups -> GREEN (ready)');
     return Colors.green.shade300;
   }
 
