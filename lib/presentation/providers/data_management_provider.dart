@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:logger/logger.dart';
 
-import '../../data/services/data_export_service.dart';
-import '../../data/services/data_deletion_service.dart';
+import '../../data/services/data_export_service.dart'
+    if (dart.library.html) '../../data/services/data_export_service_web.dart';
+import '../../data/services/data_deletion_service.dart'
+    if (dart.library.html) '../../data/services/data_deletion_service_web.dart';
 import '../../core/providers/providers.dart';
 
 /// Provider for data export service
@@ -20,17 +23,32 @@ final dataExportServiceProvider = Provider<DataExportService>((ref) {
 
 /// Provider for data deletion service
 final dataDeletionServiceProvider = Provider<DataDeletionService>((ref) {
-  return DataDeletionService(
-    userRepository: ref.read(userRepositoryProvider),
-    workoutRepository: ref.read(workoutRepositoryProvider),
-    exerciseRepository: ref.read(exerciseRepositoryProvider),
-    prRepository: ref.read(prRepositoryProvider),
-    templateRepository: ref.read(templateRepositoryProvider),
-    notificationRepository: ref.read(notificationRepositoryProvider),
-    streakRepository: ref.read(streakRepositoryProvider),
-    notificationPreferencesRepository: ref.read(notificationPreferencesRepositoryProvider),
-    databaseHelper: ref.read(databaseHelperProvider),
-  );
+  if (kIsWeb) {
+    return DataDeletionService(
+      userRepository: ref.read(userRepositoryProvider),
+      workoutRepository: ref.read(workoutRepositoryProvider),
+      exerciseRepository: ref.read(exerciseRepositoryProvider),
+      prRepository: ref.read(prRepositoryProvider),
+      templateRepository: ref.read(templateRepositoryProvider),
+      notificationRepository: ref.read(notificationRepositoryProvider),
+      streakRepository: ref.read(streakRepositoryProvider),
+      notificationPreferencesRepository:
+          ref.read(notificationPreferencesRepositoryProvider),
+    );
+  } else {
+    return DataDeletionService(
+      userRepository: ref.read(userRepositoryProvider),
+      workoutRepository: ref.read(workoutRepositoryProvider),
+      exerciseRepository: ref.read(exerciseRepositoryProvider),
+      prRepository: ref.read(prRepositoryProvider),
+      templateRepository: ref.read(templateRepositoryProvider),
+      notificationRepository: ref.read(notificationRepositoryProvider),
+      streakRepository: ref.read(streakRepositoryProvider),
+      notificationPreferencesRepository:
+          ref.read(notificationPreferencesRepositoryProvider),
+      databaseHelper: ref.read(databaseHelperProvider),
+    );
+  }
 });
 
 /// State for data management operations
