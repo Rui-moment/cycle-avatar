@@ -8,6 +8,7 @@ import '../../../lib/domain/entities/user.dart';
 import '../../../lib/domain/entities/enums.dart';
 import '../../../lib/data/datasources/local/background_sync_service.dart';
 import '../../../lib/data/datasources/local/sync_manager.dart';
+import '../../../lib/data/services/connectivity_service.dart';
 
 // Generate mocks
 @GenerateMocks([])
@@ -288,7 +289,7 @@ void main() {
     test('should identify connection types correctly', () {
       final wifiStatus = NetworkStatus(
         isOnline: true,
-        connectivityResult: MockConnectivityResult.wifi,
+        connectivityResult: ConnectivityStatus.wifi,
         lastChecked: DateTime.now(),
       );
       
@@ -298,7 +299,7 @@ void main() {
 
       final mobileStatus = NetworkStatus(
         isOnline: true,
-        connectivityResult: MockConnectivityResult.mobile,
+        connectivityResult: ConnectivityStatus.mobile,
         lastChecked: DateTime.now(),
       );
       
