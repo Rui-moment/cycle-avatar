@@ -1,34 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:logger/logger.dart';
 import '../../../domain/entities/sync_entity.dart';
 import 'database_helper.dart';
-
-/// Mock connectivity result for testing
-enum MockConnectivityResult { none, wifi, mobile, ethernet }
-
-/// Mock connectivity class for testing
-class MockConnectivity {
-  static final MockConnectivity _instance = MockConnectivity._internal();
-  factory MockConnectivity() => _instance;
-  MockConnectivity._internal();
-
-  final StreamController<MockConnectivityResult> _controller = 
-      StreamController<MockConnectivityResult>.broadcast();
-
-  Stream<MockConnectivityResult> get onConnectivityChanged => _controller.stream;
-
-  Future<MockConnectivityResult> checkConnectivity() async {
-    // Simulate network check
-    return MockConnectivityResult.wifi;
-  }
-
-  void simulateConnectivityChange(MockConnectivityResult result) {
-    _controller.add(result);
-  }
-}
+import '../../services/connectivity_service.dart';
 
 /// Manages offline synchronization queue and operations
 /// Implements Requirements 6.1, 6.2 - Offline priority sync with queueing
@@ -39,7 +15,7 @@ class SyncManager {
   SyncManager._internal();
 
   final DatabaseHelper _databaseHelper = DatabaseHelper();
-  final MockConnectivity _connectivity = MockConnectivity();
+  final ConnectivityService _connectivity = createConnectivityService();
   
   Timer? _syncTimer;
   bool _isSyncing = false;
@@ -76,6 +52,7 @@ class SyncManager {
     _syncTimer?.cancel();
     _syncResultController.close();
     _syncStatusController.close();
+    _connectivity.dispose();
   }
 
   /// Queue an entity for synchronization
@@ -396,9 +373,9 @@ class SyncManager {
     });
   }
 
-  void _onConnectivityChanged(MockConnectivityResult result) {
+  void _onConnectivityChanged(ConnectivityStatus result) {
     _logger.d('Connectivity changed: $result');
-    if (result != MockConnectivityResult.none) {
+    if (result != ConnectivityStatus.none) {
       // Network is available, trigger sync
       _triggerSync();
     }
@@ -407,7 +384,7 @@ class SyncManager {
   Future<bool> _isOnline() async {
     try {
       final connectivityResult = await _connectivity.checkConnectivity();
-      return connectivityResult != MockConnectivityResult.none;
+      return connectivityResult != ConnectivityStatus.none;
     } catch (e) {
       _logger.w('Failed to check connectivity: $e');
       return false;
