@@ -67,6 +67,13 @@
   - Primary and secondary muscle involvement weighting
   - Readiness level thresholds
   - Utility functions for fatigue and recovery calculations
+  
+### ✅ Anime Avatar Widget
+- **Location**: `lib/presentation/widgets/avatar/anime_avatar_widget.dart`
+- **Features**:
+  - Simple anime-style 2D character
+  - Body parts change color based on muscle group recovery
+  - Facial expression reflects overall fatigue
 
 ## Requirements Coverage
 

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/avatar_provider.dart';
+import '../../providers/recovery_provider.dart';
 import '../../widgets/common/avatar_level_display_widget.dart';
 import '../../widgets/common/badge_display_widget.dart';
+import '../../widgets/avatar/anime_avatar_widget.dart';
 import '../../../core/l10n/app_localizations.dart';
 
 class AvatarPage extends ConsumerStatefulWidget {
@@ -37,6 +39,7 @@ class _AvatarPageState extends ConsumerState<AvatarPage>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final avatarState = ref.watch(avatarProvider);
+    final recoveryState = ref.watch(recoveryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -66,6 +69,12 @@ class _AvatarPageState extends ConsumerState<AvatarPage>
               else if (avatarState.error != null)
                 _buildErrorState(context, l10n, avatarState.error!)
               else if (avatarState.avatarState != null) ...[
+                // Anime-style avatar reflecting recovery
+                AnimeAvatarWidget(
+                  recoveryStates: recoveryState.recoveryStates,
+                ),
+                const SizedBox(height: 16),
+
                 // Avatar level display
                 AvatarLevelDisplayWidget(
                   avatarState: avatarState.avatarState!,
