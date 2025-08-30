@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 
 
@@ -32,8 +32,7 @@ class ExerciseResponse(ExerciseBase):
     id: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # MuscleGroup schemas
@@ -41,7 +40,9 @@ class MuscleGroupBase(BaseModel):
     name_en: str
     name_ja: str
     recovery_tau: Decimal = Field(..., description="Recovery time constant in hours")
-    fatigue_multiplier: Decimal = Field(..., description="Fatigue calculation multiplier")
+    fatigue_multiplier: Decimal = Field(
+        ..., description="Fatigue calculation multiplier"
+    )
     body_region: str
 
 
@@ -52,8 +53,7 @@ class MuscleGroupCreate(MuscleGroupBase):
 class MuscleGroupResponse(MuscleGroupBase):
     id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Set schemas
@@ -61,7 +61,9 @@ class SetBase(BaseModel):
     exercise_id: UUID
     weight: Decimal = Field(..., description="Weight in kg")
     reps: int = Field(..., ge=1, description="Number of repetitions")
-    rpe: Optional[int] = Field(None, ge=1, le=10, description="Rate of Perceived Exertion")
+    rpe: Optional[int] = Field(
+        None, ge=1, le=10, description="Rate of Perceived Exertion"
+    )
     rest_seconds: Optional[int] = Field(None, ge=0, description="Rest time in seconds")
     notes: Optional[str] = None
     set_order: int = Field(..., ge=1, description="Order of set in session")
@@ -87,8 +89,7 @@ class SetResponse(SetBase):
     updated_at: datetime
     exercise: Optional[ExerciseResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # WorkoutSession schemas
@@ -117,8 +118,7 @@ class WorkoutSessionResponse(WorkoutSessionBase):
     updated_at: datetime
     sets: List[SetResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Batch sync schemas
@@ -166,8 +166,7 @@ class RecoveryStateResponse(RecoveryStateBase):
     last_updated: datetime
     muscle_group: Optional[MuscleGroupResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FatigueEventBase(BaseModel):
@@ -185,8 +184,7 @@ class FatigueEventResponse(FatigueEventBase):
     id: UUID
     muscle_group: Optional[MuscleGroupResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # PR Record schemas
@@ -207,8 +205,7 @@ class PRRecordResponse(PRRecordBase):
     user_id: UUID
     exercise: Optional[ExerciseResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Template schemas
@@ -235,5 +232,4 @@ class TemplateResponse(TemplateBase):
     user_id: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

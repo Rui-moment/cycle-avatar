@@ -1,33 +1,23 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'presentation/widgets/avatar/anime_avatar_widget.dart';
-import 'domain/entities/recovery_state.dart';
-import 'domain/entities/enums.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Enums
 enum MuscleGroupState { ready, warm, fatigued }
 
 // Global state providers
-final workoutDataProvider = StateNotifierProvider<WorkoutDataNotifier, WorkoutData>((ref) {
-  return WorkoutDataNotifier();
-});
+final workoutDataProvider =
+    StateNotifierProvider<WorkoutDataNotifier, WorkoutData>(
+        (ref) => WorkoutDataNotifier());
 
-final languageProvider = StateNotifierProvider<LanguageNotifier, Locale>((ref) {
-  return LanguageNotifier();
-});
+final languageProvider = StateNotifierProvider<LanguageNotifier, Locale>(
+    (ref) => LanguageNotifier());
 
 // Data models
 class WorkoutData {
-  final List<WorkoutSession> sessions;
-  final double totalVolume;
-  final int totalSets;
-  final double avatarLevel;
-  final Map<String, double> muscleGroupLevels;
-  final Map<String, MuscleGroupState> muscleGroupStates;
-  final Map<String, double> muscleGroupFatigue; // 疲労度 (0-100)
-  final List<WorkoutTemplate> templates;
-
   const WorkoutData({
     this.sessions = const [],
     this.totalVolume = 0,
@@ -57,6 +47,15 @@ class WorkoutData {
     this.templates = const [],
   });
 
+  final List<WorkoutSession> sessions;
+  final double totalVolume;
+  final int totalSets;
+  final double avatarLevel;
+  final Map<String, double> muscleGroupLevels;
+  final Map<String, MuscleGroupState> muscleGroupStates;
+  final Map<String, double> muscleGroupFatigue; // 疲労度 (0-100)
+  final List<WorkoutTemplate> templates;
+
   WorkoutData copyWith({
     List<WorkoutSession>? sessions,
     double? totalVolume,
@@ -66,108 +65,211 @@ class WorkoutData {
     Map<String, MuscleGroupState>? muscleGroupStates,
     Map<String, double>? muscleGroupFatigue,
     List<WorkoutTemplate>? templates,
-  }) {
-    return WorkoutData(
-      sessions: sessions ?? this.sessions,
-      totalVolume: totalVolume ?? this.totalVolume,
-      totalSets: totalSets ?? this.totalSets,
-      avatarLevel: avatarLevel ?? this.avatarLevel,
-      muscleGroupLevels: muscleGroupLevels ?? this.muscleGroupLevels,
-      muscleGroupStates: muscleGroupStates ?? this.muscleGroupStates,
-      muscleGroupFatigue: muscleGroupFatigue ?? this.muscleGroupFatigue,
-      templates: templates ?? this.templates,
-    );
-  }
+  }) =>
+      WorkoutData(
+        sessions: sessions ?? this.sessions,
+        totalVolume: totalVolume ?? this.totalVolume,
+        totalSets: totalSets ?? this.totalSets,
+        avatarLevel: avatarLevel ?? this.avatarLevel,
+        muscleGroupLevels: muscleGroupLevels ?? this.muscleGroupLevels,
+        muscleGroupStates: muscleGroupStates ?? this.muscleGroupStates,
+        muscleGroupFatigue: muscleGroupFatigue ?? this.muscleGroupFatigue,
+        templates: templates ?? this.templates,
+      );
 }
 
 class WorkoutSession {
-  final String name;
-  final List<WorkoutSet> sets;
-  final DateTime date;
-  final double volume;
-
   const WorkoutSession({
     required this.name,
     required this.sets,
     required this.date,
     required this.volume,
   });
+
+  final String name;
+  final List<WorkoutSet> sets;
+  final DateTime date;
+  final double volume;
 }
 
 class WorkoutSet {
-  final double weight;
-  final int reps;
-  final int rpe;
-  final DateTime time;
-
   const WorkoutSet({
     required this.weight,
     required this.reps,
     required this.rpe,
     required this.time,
   });
+
+  final double weight;
+  final int reps;
+  final int rpe;
+  final DateTime time;
 }
 
 class WorkoutTemplate {
-  final String name;
-  final List<String> exercises;
-  final Map<String, List<WorkoutSet>> suggestedSets;
-
   const WorkoutTemplate({
     required this.name,
     required this.exercises,
     required this.suggestedSets,
   });
+
+  final String name;
+  final List<String> exercises;
+  final Map<String, List<WorkoutSet>> suggestedSets;
 }
 
 // State notifiers
 class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
   WorkoutDataNotifier() : super(const WorkoutData()) {
-    // Initialize with default templates
-    _initializeTemplates();
-    // Start recovery timer
+    _loadData();
+  }
+
+  static const String _storageKey = 'workout_data_simple';
+
+  Future<void> _loadData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_storageKey);
+      
+      if (jsonString != null) {
+        final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
+        
+        // Load complete workout data
+        final loadedData = WorkoutData(
+          sessions: (jsonData['sessions'] as List<dynamic>?)
+                  ?.map((s) => _sessionFromJson(
+                      Map<String, dynamic>.from(s as Map)))
+                  .toList() ??
+              [],
+          totalVolume:
+              (jsonData['totalVolume'] as num?)?.toDouble() ?? 0.0,
+          totalSets: (jsonData['totalSets'] as int?) ?? 0,
+          avatarLevel:
+              (jsonData['avatarLevel'] as num?)?.toDouble() ?? 1.0,
+          muscleGroupLevels: Map<String, double>.from(
+              (jsonData['muscleGroupLevels'] as Map<String, dynamic>?) ??
+                  {
+                    'Chest': 1.0,
+                    'Back': 1.0,
+                    'Legs': 1.0,
+                    'Shoulders': 1.0,
+                    'Arms': 1.0,
+                  }),
+          muscleGroupStates:
+              (jsonData['muscleGroupStates'] as Map<String, dynamic>?)
+                      ?.map((k, v) =>
+                          MapEntry(k, MuscleGroupState.values[v as int])) ??
+                  {
+                    'Chest': MuscleGroupState.ready,
+                    'Back': MuscleGroupState.ready,
+                    'Legs': MuscleGroupState.ready,
+                    'Shoulders': MuscleGroupState.ready,
+                    'Arms': MuscleGroupState.ready,
+                  },
+          muscleGroupFatigue: Map<String, double>.from(
+              (jsonData['muscleGroupFatigue'] as Map<String, dynamic>?) ??
+                  {
+                    'Chest': 0.0,
+                    'Back': 0.0,
+                    'Legs': 0.0,
+                    'Shoulders': 0.0,
+                    'Arms': 0.0,
+                  }),
+          templates: (jsonData['templates'] as List<dynamic>?)
+                  ?.map((t) => _templateFromJson(t as Map<String, dynamic>))
+                  .toList() ??
+              [],
+        );
+        
+        state = loadedData;
+        debugPrint('DEBUG: ✅ Complete data loaded - '
+            'Sessions: ${state.sessions.length}, '
+            'Fatigue: ${state.muscleGroupFatigue}');
+      } else {
+        debugPrint('DEBUG: No saved data found. Using defaults.');
+        _initializeTemplates();
+      }
+    } on Exception catch (e) {
+      debugPrint('DEBUG: Error loading data: $e');
+      _initializeTemplates();
+    }
+    
     _startRecoveryTimer();
   }
 
-  /// Convert current muscle group states to RecoveryState format for avatar
-  Map<String, RecoveryState> getRecoveryStatesForAvatar() {
-    final recoveryStates = <String, RecoveryState>{};
-    
-    // Map our muscle groups to avatar muscle groups
-    final muscleGroupMapping = {
-      'Chest': ['chest'],
-      'Back': ['back'],
-      'Legs': ['quadriceps', 'hamstrings', 'calves'],
-      'Shoulders': ['shoulders'],
-      'Arms': ['biceps', 'triceps'],
-    };
-    
-    print('DEBUG: Converting fatigue states for avatar:');
-    for (final entry in state.muscleGroupFatigue.entries) {
-      final ourMuscleGroup = entry.key;
-      final fatigueLevel = entry.value;
-      final readinessLevel = ReadinessLevel.fromFatigueScore(fatigueLevel);
-      
-      print('DEBUG: $ourMuscleGroup - Fatigue: ${fatigueLevel.toStringAsFixed(1)}, Level: ${readinessLevel.name}');
-      
-      // Map to avatar muscle groups
-      final avatarMuscleGroups = muscleGroupMapping[ourMuscleGroup] ?? [ourMuscleGroup.toLowerCase()];
-      
-      for (final avatarMuscleGroup in avatarMuscleGroups) {
-        recoveryStates[avatarMuscleGroup] = RecoveryState(
-          id: 'recovery_${avatarMuscleGroup}',
-          muscleGroupId: avatarMuscleGroup,
-          currentFatigue: fatigueLevel,
-          lastUpdated: DateTime.now(),
-          readinessLevel: readinessLevel,
-          initialFatigue: 100.0, // Assume max fatigue for percentage calculation
-        );
-      }
+  Future<void> _saveData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'sessions': state.sessions.map(_sessionToJson).toList(),
+        'totalVolume': state.totalVolume,
+        'totalSets': state.totalSets,
+        'avatarLevel': state.avatarLevel,
+        'muscleGroupLevels': state.muscleGroupLevels,
+        'muscleGroupStates': state.muscleGroupStates.map((k, v) => MapEntry(k, v.index)),
+        'muscleGroupFatigue': state.muscleGroupFatigue,
+        'templates': state.templates.map(_templateToJson).toList(),
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      await prefs.setString(_storageKey, jsonEncode(data));
+      debugPrint('DEBUG: ✅ Complete data saved - '
+          'Sessions: ${state.sessions.length}, '
+          'Fatigue: ${state.muscleGroupFatigue}');
+    } on Exception catch (e) {
+      debugPrint('DEBUG: Error saving data: $e');
     }
-    
-    print('DEBUG: Avatar recovery states: ${recoveryStates.keys.toList()}');
-    return recoveryStates;
   }
+
+  // Helper methods for JSON conversion
+  Map<String, dynamic> _sessionToJson(WorkoutSession session) => {
+        'name': session.name,
+        'sets': session.sets.map(_setToJson).toList(),
+        'date': session.date.toIso8601String(),
+        'volume': session.volume,
+      };
+
+  WorkoutSession _sessionFromJson(Map<String, dynamic> json) => WorkoutSession(
+        name: json['name'] as String,
+        sets: (json['sets'] as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(_setFromJson)
+            .toList(),
+        date: DateTime.parse(json['date'] as String),
+        volume: (json['volume'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> _setToJson(WorkoutSet set) => {
+        'weight': set.weight,
+        'reps': set.reps,
+        'rpe': set.rpe,
+        'time': set.time.toIso8601String(),
+      };
+
+  WorkoutSet _setFromJson(Map<String, dynamic> json) => WorkoutSet(
+        weight: (json['weight'] as num).toDouble(),
+        reps: json['reps'] as int,
+        rpe: json['rpe'] as int,
+        time: DateTime.parse(json['time'] as String),
+      );
+
+  Map<String, dynamic> _templateToJson(WorkoutTemplate template) => {
+        'name': template.name,
+        'exercises': template.exercises,
+        'suggestedSets': template.suggestedSets.map((k, v) => 
+            MapEntry(k, v.map(_setToJson).toList())),
+      };
+
+  WorkoutTemplate _templateFromJson(Map<String, dynamic> json) => WorkoutTemplate(
+        name: json['name'] as String,
+        exercises: List<String>.from(json['exercises'] as List<dynamic>),
+        suggestedSets: (json['suggestedSets'] as Map<String, dynamic>).map((k, v) =>
+            MapEntry(k, (v as List<dynamic>)
+                .cast<Map<String, dynamic>>()
+                .map(_setFromJson)
+                .toList())),
+      );
+
+
 
   void _initializeTemplates() {
     final now = DateTime.now();
@@ -238,6 +340,8 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     ];
     
     state = state.copyWith(templates: defaultTemplates);
+    // Save initial templates
+    _saveData();
   }
 
   void _startRecoveryTimer() {
@@ -277,13 +381,18 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
         muscleGroupFatigue: newFatigue,
         muscleGroupStates: newStates,
       );
-      print('DEBUG: Recovery updated - Fatigue: ${newFatigue.map((k, v) => MapEntry(k, v.toStringAsFixed(0)))}');
-      print('DEBUG: States: ${newStates.map((k, v) => MapEntry(k, v.name))}');
+      // Save recovery updates
+      _saveData();
+      debugPrint('DEBUG: Recovery updated - '
+          'Fatigue: ${newFatigue.map((k, v) => 
+              MapEntry(k, v.toStringAsFixed(0)))}');
+      debugPrint('DEBUG: States: ${newStates.map((k, v) => 
+          MapEntry(k, v.name))}');
     }
   }
 
   void addWorkoutSession(String name, List<WorkoutSet> sets) {
-    print('DEBUG: Adding workout session: $name with ${sets.length} sets');
+    debugPrint('DEBUG: Adding workout session: $name with ${sets.length} sets');
     
     // Enhanced volume calculation with RPE weighting
     final totalVolume = _calculateTotalVolume(sets);
@@ -304,8 +413,10 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     final progressPoints = _calculateProgressPoints(sets, stimulusScore);
     final newAvatarLevel = state.avatarLevel + (progressPoints / 100);
     
-    print('DEBUG: Volume: ${totalVolume.toStringAsFixed(1)}kg, Stimulus: ${stimulusScore.toStringAsFixed(1)}');
-    print('DEBUG: New avatar level: $newAvatarLevel (was ${state.avatarLevel})');
+    debugPrint('DEBUG: Volume: ${totalVolume.toStringAsFixed(1)}kg, '
+        'Stimulus: ${stimulusScore.toStringAsFixed(1)}');
+    debugPrint('DEBUG: New avatar level: $newAvatarLevel '
+        '(was ${state.avatarLevel})');
     
     // Enhanced muscle group stimulation
     final newMuscleGroupLevels = _applyMuscleGroupStimulation(name, sets, state.muscleGroupLevels);
@@ -323,7 +434,10 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
       muscleGroupStates: fatigueResult['states'] as Map<String, MuscleGroupState>,
     );
     
-    print('DEBUG: State updated. Sessions count: ${state.sessions.length}');
+    // Save data after workout
+    _saveData();
+    debugPrint('DEBUG: State updated. '
+        'Sessions count: ${state.sessions.length}');
   }
 
   // Enhanced volume calculation with RPE weighting
@@ -385,39 +499,66 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     
     // Primary muscle group stimulation (main target)
     if (exerciseLower.contains('squat') || exerciseLower.contains('lunges')) {
-      newLevels['Legs'] = (newLevels['Legs']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
-      newLevels['Back'] = (newLevels['Back']! + stimulusIntensity * 0.2).clamp(1.0, 10.0); // Secondary
+      newLevels['Legs'] = 
+          (newLevels['Legs']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
+      newLevels['Back'] = 
+          (newLevels['Back']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
     } else if (exerciseLower.contains('deadlift')) {
-      newLevels['Back'] = (newLevels['Back']! + stimulusIntensity * 0.6).clamp(1.0, 10.0);
-      newLevels['Legs'] = (newLevels['Legs']! + stimulusIntensity * 0.4).clamp(1.0, 10.0);
-    } else if (exerciseLower.contains('bench') || exerciseLower.contains('push')) {
-      newLevels['Chest'] = (newLevels['Chest']! + stimulusIntensity * 0.7).clamp(1.0, 10.0);
-      newLevels['Shoulders'] = (newLevels['Shoulders']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.1).clamp(1.0, 10.0);
-    } else if (exerciseLower.contains('pull') || exerciseLower.contains('row') || exerciseLower.contains('chin')) {
-      newLevels['Back'] = (newLevels['Back']! + stimulusIntensity * 0.7).clamp(1.0, 10.0);
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.3).clamp(1.0, 10.0);
-    } else if (exerciseLower.contains('press') && exerciseLower.contains('shoulder')) {
-      newLevels['Shoulders'] = (newLevels['Shoulders']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
+      newLevels['Back'] = 
+          (newLevels['Back']! + stimulusIntensity * 0.6).clamp(1.0, 10.0);
+      newLevels['Legs'] = 
+          (newLevels['Legs']! + stimulusIntensity * 0.4).clamp(1.0, 10.0);
+    } else if (exerciseLower.contains('bench') || 
+               exerciseLower.contains('push')) {
+      newLevels['Chest'] = 
+          (newLevels['Chest']! + stimulusIntensity * 0.7).clamp(1.0, 10.0);
+      newLevels['Shoulders'] = 
+          (newLevels['Shoulders']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.1).clamp(1.0, 10.0);
+    } else if (exerciseLower.contains('pull') || 
+               exerciseLower.contains('row') || 
+               exerciseLower.contains('chin')) {
+      newLevels['Back'] = 
+          (newLevels['Back']! + stimulusIntensity * 0.7).clamp(1.0, 10.0);
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.3).clamp(1.0, 10.0);
+    } else if (exerciseLower.contains('press') && 
+               exerciseLower.contains('shoulder')) {
+      newLevels['Shoulders'] = 
+          (newLevels['Shoulders']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
     } else if (exerciseLower.contains('curl')) {
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.9).clamp(1.0, 10.0);
-    } else if (exerciseLower.contains('extension') || exerciseLower.contains('tricep')) {
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
-    } else if (exerciseLower.contains('leg') || exerciseLower.contains('calf')) {
-      newLevels['Legs'] = (newLevels['Legs']! + stimulusIntensity * 0.9).clamp(1.0, 10.0);
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.9).clamp(1.0, 10.0);
+    } else if (exerciseLower.contains('extension') || 
+               exerciseLower.contains('tricep')) {
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.8).clamp(1.0, 10.0);
+    } else if (exerciseLower.contains('leg') || 
+               exerciseLower.contains('calf')) {
+      newLevels['Legs'] = 
+          (newLevels['Legs']! + stimulusIntensity * 0.9).clamp(1.0, 10.0);
     } else if (exerciseLower.contains('dip')) {
-      newLevels['Chest'] = (newLevels['Chest']! + stimulusIntensity * 0.5).clamp(1.0, 10.0);
-      newLevels['Shoulders'] = (newLevels['Shoulders']! + stimulusIntensity * 0.3).clamp(1.0, 10.0);
-      newLevels['Arms'] = (newLevels['Arms']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
+      newLevels['Chest'] = 
+          (newLevels['Chest']! + stimulusIntensity * 0.5).clamp(1.0, 10.0);
+      newLevels['Shoulders'] = 
+          (newLevels['Shoulders']! + stimulusIntensity * 0.3).clamp(1.0, 10.0);
+      newLevels['Arms'] = 
+          (newLevels['Arms']! + stimulusIntensity * 0.2).clamp(1.0, 10.0);
     } else {
       // Default: small general progression
-      newLevels.updateAll((key, value) => (value + stimulusIntensity * 0.1).clamp(1.0, 10.0));
+      newLevels.updateAll((key, value) => 
+          (value + stimulusIntensity * 0.1).clamp(1.0, 10.0));
     }
     
     // Log the stimulation details
-    print('DEBUG: Exercise: $exerciseName, Stimulus: ${stimulusIntensity.toStringAsFixed(2)}');
-    print('DEBUG: Muscle progression: ${newLevels.map((k, v) => MapEntry(k, v.toStringAsFixed(1)))}');
+    debugPrint('DEBUG: Exercise: $exerciseName, '
+        'Stimulus: ${stimulusIntensity.toStringAsFixed(2)}');
+    debugPrint('DEBUG: Muscle progression: '
+        '${newLevels.map((k, v) => 
+            MapEntry(k, v.toStringAsFixed(1)))}');
     
     return newLevels;
   }
@@ -440,31 +581,54 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     
     // Apply fatigue to specific muscle groups
     if (exerciseLower.contains('squat') || exerciseLower.contains('lunges')) {
-      newFatigue['Legs'] = (newFatigue['Legs']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
-      newFatigue['Back'] = (newFatigue['Back']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
+      newFatigue['Legs'] = 
+          (newFatigue['Legs']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
+      newFatigue['Back'] = 
+          (newFatigue['Back']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
     } else if (exerciseLower.contains('deadlift')) {
-      newFatigue['Back'] = (newFatigue['Back']! + fatigueIntensity * 0.6).clamp(0.0, 100.0);
-      newFatigue['Legs'] = (newFatigue['Legs']! + fatigueIntensity * 0.4).clamp(0.0, 100.0);
-    } else if (exerciseLower.contains('bench') || exerciseLower.contains('push')) {
-      newFatigue['Chest'] = (newFatigue['Chest']! + fatigueIntensity * 0.7).clamp(0.0, 100.0);
-      newFatigue['Shoulders'] = (newFatigue['Shoulders']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.1).clamp(0.0, 100.0);
-    } else if (exerciseLower.contains('pull') || exerciseLower.contains('row') || exerciseLower.contains('chin')) {
-      newFatigue['Back'] = (newFatigue['Back']! + fatigueIntensity * 0.7).clamp(0.0, 100.0);
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.3).clamp(0.0, 100.0);
-    } else if (exerciseLower.contains('press') && exerciseLower.contains('shoulder')) {
-      newFatigue['Shoulders'] = (newFatigue['Shoulders']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
+      newFatigue['Back'] = 
+          (newFatigue['Back']! + fatigueIntensity * 0.6).clamp(0.0, 100.0);
+      newFatigue['Legs'] = 
+          (newFatigue['Legs']! + fatigueIntensity * 0.4).clamp(0.0, 100.0);
+    } else if (exerciseLower.contains('bench') || 
+               exerciseLower.contains('push')) {
+      newFatigue['Chest'] = 
+          (newFatigue['Chest']! + fatigueIntensity * 0.7).clamp(0.0, 100.0);
+      newFatigue['Shoulders'] = 
+          (newFatigue['Shoulders']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.1).clamp(0.0, 100.0);
+    } else if (exerciseLower.contains('pull') || 
+               exerciseLower.contains('row') || 
+               exerciseLower.contains('chin')) {
+      newFatigue['Back'] = 
+          (newFatigue['Back']! + fatigueIntensity * 0.7).clamp(0.0, 100.0);
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.3).clamp(0.0, 100.0);
+    } else if (exerciseLower.contains('press') && 
+               exerciseLower.contains('shoulder')) {
+      newFatigue['Shoulders'] = 
+          (newFatigue['Shoulders']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
     } else if (exerciseLower.contains('curl')) {
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.9).clamp(0.0, 100.0);
-    } else if (exerciseLower.contains('extension') || exerciseLower.contains('tricep')) {
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
-    } else if (exerciseLower.contains('leg') || exerciseLower.contains('calf')) {
-      newFatigue['Legs'] = (newFatigue['Legs']! + fatigueIntensity * 0.9).clamp(0.0, 100.0);
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.9).clamp(0.0, 100.0);
+    } else if (exerciseLower.contains('extension') || 
+               exerciseLower.contains('tricep')) {
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.8).clamp(0.0, 100.0);
+    } else if (exerciseLower.contains('leg') || 
+               exerciseLower.contains('calf')) {
+      newFatigue['Legs'] = 
+          (newFatigue['Legs']! + fatigueIntensity * 0.9).clamp(0.0, 100.0);
     } else if (exerciseLower.contains('dip')) {
-      newFatigue['Chest'] = (newFatigue['Chest']! + fatigueIntensity * 0.5).clamp(0.0, 100.0);
-      newFatigue['Shoulders'] = (newFatigue['Shoulders']! + fatigueIntensity * 0.3).clamp(0.0, 100.0);
-      newFatigue['Arms'] = (newFatigue['Arms']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
+      newFatigue['Chest'] = 
+          (newFatigue['Chest']! + fatigueIntensity * 0.5).clamp(0.0, 100.0);
+      newFatigue['Shoulders'] = 
+          (newFatigue['Shoulders']! + fatigueIntensity * 0.3).clamp(0.0, 100.0);
+      newFatigue['Arms'] = 
+          (newFatigue['Arms']! + fatigueIntensity * 0.2).clamp(0.0, 100.0);
     }
     
     // Update states based on new fatigue levels (80% threshold for fatigued)
@@ -479,8 +643,11 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
       }
     }
     
-    print('DEBUG: Post-workout fatigue: ${newFatigue.map((k, v) => MapEntry(k, v.toStringAsFixed(0)))}');
-    print('DEBUG: Muscle states: ${newStates.map((k, v) => MapEntry(k, v.name))}');
+    debugPrint('DEBUG: Post-workout fatigue: '
+        '${newFatigue.map((k, v) => 
+            MapEntry(k, v.toStringAsFixed(0)))}');
+    debugPrint('DEBUG: Muscle states: '
+        '${newStates.map((k, v) => MapEntry(k, v.name))}');
     
     return {
       'fatigue': newFatigue,
@@ -503,9 +670,8 @@ class AppLocalizations {
 
   AppLocalizations(this.locale);
 
-  static AppLocalizations of(BuildContext context) {
-    return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
-  }
+  static AppLocalizations of(BuildContext context) =>
+      Localizations.of<AppLocalizations>(context, AppLocalizations)!;
 
   String get welcome => locale.languageCode == 'ja' ? 'CycleAvatarへようこそ！' : 'Welcome to CycleAvatar!';
   String get todaysRecommendation => locale.languageCode == 'ja' ? '今日のおすすめ' : 'Today\'s Recommendation';
@@ -594,9 +760,7 @@ class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   bool isSupported(Locale locale) => ['en', 'ja'].contains(locale.languageCode);
 
   @override
-  Future<AppLocalizations> load(Locale locale) async {
-    return AppLocalizations(locale);
-  }
+  Future<AppLocalizations> load(Locale locale) async => AppLocalizations(locale);
 
   @override
   bool shouldReload(AppLocalizationsDelegate old) => false;
@@ -699,7 +863,7 @@ class HomeTab extends ConsumerWidget {
     final workoutData = ref.watch(workoutDataProvider);
     
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -710,7 +874,7 @@ class HomeTab extends ConsumerWidget {
           const SizedBox(height: 16),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -738,10 +902,18 @@ class HomeTab extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   // アニメアバターウィジェット
-                  SizedBox(
+                  Container(
                     height: 200,
-                    child: AnimeAvatarWidget(
-                      recoveryStates: ref.read(workoutDataProvider.notifier).getRecoveryStatesForAvatar(),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '🏋️ Avatar System\n(Simplified)',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -817,14 +989,11 @@ class MuscleGroupIndicator extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     
     // Color based on fatigue level directly
-    Color color;
-    if (fatigueLevel >= 80) {
-      color = Colors.red; // Fatigued
-    } else if (fatigueLevel >= 40) {
-      color = Colors.orange; // Warm
-    } else {
-      color = Colors.green; // Ready
-    }
+    final color = fatigueLevel >= 80
+        ? Colors.red // Fatigued
+        : fatigueLevel >= 40
+            ? Colors.orange // Warm
+            : Colors.green; // Ready
 
     return Column(
       children: [
@@ -835,7 +1004,7 @@ class MuscleGroupIndicator extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.3),
+                color: color.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
             ),
@@ -1292,14 +1461,14 @@ class AvatarTab extends ConsumerWidget {
 }
 
 class MuscleGroupLevel extends StatelessWidget {
-  final String name;
-  final double level;
-
   const MuscleGroupLevel({
     super.key,
     required this.name,
     required this.level,
   });
+
+  final String name;
+  final double level;
 
   @override
   Widget build(BuildContext context) {

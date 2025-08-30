@@ -5,10 +5,7 @@ from app.core.config import settings
 
 # Create SQLAlchemy engine
 engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    echo=settings.DEBUG
+    settings.DATABASE_URL, pool_pre_ping=True, pool_recycle=300, echo=settings.DEBUG
 )
 
 # Create SessionLocal class
@@ -16,6 +13,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create Base class for models
 Base = declarative_base()
+
 
 def get_db():
     """Dependency to get database session."""
