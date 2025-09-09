@@ -5,7 +5,7 @@ import '../../providers/avatar_provider.dart';
 import '../../providers/recovery_provider.dart';
 import '../../widgets/common/avatar_level_display_widget.dart';
 import '../../widgets/common/badge_display_widget.dart';
-import '../../widgets/avatar/anime_avatar_widget.dart';
+import '../../widgets/avatar/composite_avatar_widget.dart';
 import '../../../core/l10n/app_localizations.dart';
 
 class AvatarPage extends ConsumerStatefulWidget {
@@ -19,6 +19,7 @@ class _AvatarPageState extends ConsumerState<AvatarPage>
     with TickerProviderStateMixin {
   late AnimationController _levelUpAnimationController;
   bool _showLevelUpAnimation = false;
+  AvatarStyle _avatarStyle = AvatarStyle.fitness;
 
   @override
   void initState() {
@@ -69,9 +70,22 @@ class _AvatarPageState extends ConsumerState<AvatarPage>
               else if (avatarState.error != null)
                 _buildErrorState(context, l10n, avatarState.error!)
               else if (avatarState.avatarState != null) ...[
-                // Anime-style avatar reflecting recovery
-                AnimeAvatarWidget(
-                  recoveryStates: recoveryState.recoveryStates,
+                // Enhanced fitness avatar with style switching
+                Center(
+                  child: CompositeAvatarWidget(
+                    avatarState: avatarState.avatarState!,
+                    recoveryStates: recoveryState.recoveryStates,
+                    size: 250,
+                    style: _avatarStyle,
+                    showStyleToggle: true,
+                    showLevelIndicator: true,
+                    showCooldownEffects: true,
+                    onStyleChanged: (newStyle) {
+                      setState(() {
+                        _avatarStyle = newStyle;
+                      });
+                    },
+                  ),
                 ),
                 const SizedBox(height: 16),
 

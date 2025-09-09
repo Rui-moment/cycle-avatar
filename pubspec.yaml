@@ -13,6 +13,8 @@ dependencies:
   
   # State Management
   flutter_riverpod: ^2.4.9
+  # Routing
+  go_router: ^14.2.7
   
   # UI Components
   cupertino_icons: ^1.0.2
@@ -21,6 +23,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
+  
+  # Fonts
+  google_fonts: ^6.2.1
   
   # Simple Storage for data persistence
   shared_preferences: ^2.2.2
@@ -35,3 +40,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+  
+  assets:
+    - assets/fitness_avatar.svg
+    - assets/fitness_avatar.png
+    - assets/fitness_avatar_64.png
+    - assets/fitness_avatar_128.png

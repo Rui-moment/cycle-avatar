@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'services/fatigue_model.dart';
+
+import 'widgets/avatar_2d.dart';
 
 // Enums
 enum MuscleGroupState { ready, warm, fatigued }
@@ -45,6 +50,7 @@ class WorkoutData {
       'Arms': 0.0,
     },
     this.templates = const [],
+    this.weights = const [],
   });
 
   final List<WorkoutSession> sessions;
@@ -55,6 +61,7 @@ class WorkoutData {
   final Map<String, MuscleGroupState> muscleGroupStates;
   final Map<String, double> muscleGroupFatigue; // 疲労度 (0-100)
   final List<WorkoutTemplate> templates;
+  final List<WeightEntry> weights;
 
   WorkoutData copyWith({
     List<WorkoutSession>? sessions,
@@ -65,6 +72,7 @@ class WorkoutData {
     Map<String, MuscleGroupState>? muscleGroupStates,
     Map<String, double>? muscleGroupFatigue,
     List<WorkoutTemplate>? templates,
+    List<WeightEntry>? weights,
   }) =>
       WorkoutData(
         sessions: sessions ?? this.sessions,
@@ -75,6 +83,7 @@ class WorkoutData {
         muscleGroupStates: muscleGroupStates ?? this.muscleGroupStates,
         muscleGroupFatigue: muscleGroupFatigue ?? this.muscleGroupFatigue,
         templates: templates ?? this.templates,
+        weights: weights ?? this.weights,
       );
 }
 
@@ -104,6 +113,15 @@ class WorkoutSet {
   final int reps;
   final int rpe;
   final DateTime time;
+}
+
+class WeightEntry {
+  const WeightEntry({
+    required this.date,
+    required this.weight,
+  });
+  final DateTime date;
+  final double weight;
 }
 
 class WorkoutTemplate {
@@ -179,6 +197,10 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
                   ?.map((t) => _templateFromJson(t as Map<String, dynamic>))
                   .toList() ??
               [],
+          weights: (jsonData['weights'] as List<dynamic>?)
+                  ?.map((w) => _weightFromJson(Map<String, dynamic>.from(w as Map)))
+                  .toList() ??
+              [],
         );
         
         state = loadedData;
@@ -209,6 +231,7 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
         'muscleGroupStates': state.muscleGroupStates.map((k, v) => MapEntry(k, v.index)),
         'muscleGroupFatigue': state.muscleGroupFatigue,
         'templates': state.templates.map(_templateToJson).toList(),
+        'weights': state.weights.map(_weightToJson).toList(),
         'timestamp': DateTime.now().toIso8601String(),
       };
       await prefs.setString(_storageKey, jsonEncode(data));
@@ -259,6 +282,11 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
             MapEntry(k, v.map(_setToJson).toList())),
       };
 
+  Map<String, dynamic> _weightToJson(WeightEntry w) => {
+        'date': w.date.toIso8601String(),
+        'weight': w.weight,
+      };
+
   WorkoutTemplate _templateFromJson(Map<String, dynamic> json) => WorkoutTemplate(
         name: json['name'] as String,
         exercises: List<String>.from(json['exercises'] as List<dynamic>),
@@ -267,6 +295,11 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
                 .cast<Map<String, dynamic>>()
                 .map(_setFromJson)
                 .toList())),
+      );
+
+  WeightEntry _weightFromJson(Map<String, dynamic> json) => WeightEntry(
+        date: DateTime.parse(json['date'] as String),
+        weight: (json['weight'] as num).toDouble(),
       );
 
 
@@ -353,41 +386,30 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
   }
 
   void _updateRecovery() {
-    final newFatigue = Map<String, double>.from(state.muscleGroupFatigue);
+    // Apply exponential decay for a 30s step
+    const seconds = 30;
+    final hours = seconds / 3600.0;
+    final decayed = FatigueService.decay(state.muscleGroupFatigue, hours);
+
     final newStates = Map<String, MuscleGroupState>.from(state.muscleGroupStates);
-    bool hasChanges = false;
-
-    // Recovery: reduce fatigue by 10 points every 30 seconds (slower recovery)
-    for (final entry in newFatigue.entries) {
-      final currentFatigue = entry.value;
-      if (currentFatigue > 0) {
-        final newFatigueValue = (currentFatigue - 10).clamp(0.0, 100.0);
-        newFatigue[entry.key] = newFatigueValue;
-        
-        // Update state based on fatigue level (80% threshold for fatigued)
-        if (newFatigueValue >= 80) {
-          newStates[entry.key] = MuscleGroupState.fatigued;
-        } else if (newFatigueValue >= 40) {
-          newStates[entry.key] = MuscleGroupState.warm;
-        } else {
-          newStates[entry.key] = MuscleGroupState.ready;
-        }
-        hasChanges = true;
+    decayed.forEach((g, v) {
+      if (v >= 80) {
+        newStates[g] = MuscleGroupState.fatigued;
+      } else if (v >= 40) {
+        newStates[g] = MuscleGroupState.warm;
+      } else {
+        newStates[g] = MuscleGroupState.ready;
       }
-    }
+    });
 
-    if (hasChanges) {
+    if (decayed.toString() != state.muscleGroupFatigue.toString()) {
       state = state.copyWith(
-        muscleGroupFatigue: newFatigue,
+        muscleGroupFatigue: decayed,
         muscleGroupStates: newStates,
       );
-      // Save recovery updates
       _saveData();
-      debugPrint('DEBUG: Recovery updated - '
-          'Fatigue: ${newFatigue.map((k, v) => 
-              MapEntry(k, v.toStringAsFixed(0)))}');
-      debugPrint('DEBUG: States: ${newStates.map((k, v) => 
-          MapEntry(k, v.name))}');
+      debugPrint('DEBUG: Recovery (exp decay) - Fatigue: '
+          "${decayed.map((k, v) => MapEntry(k, v.toStringAsFixed(0)))}");
     }
   }
 
@@ -421,8 +443,25 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
     // Enhanced muscle group stimulation
     final newMuscleGroupLevels = _applyMuscleGroupStimulation(name, sets, state.muscleGroupLevels);
     
-    // Apply fatigue based on stimulus intensity
-    final fatigueResult = _applyMuscleGroupFatigue(name, sets, state.muscleGroupFatigue, state.muscleGroupStates);
+    // Apply fatigue using science-based model (VL × IF × coeff) with distribution
+    final deltaPct = FatigueService.computeFatigueDelta(name, sets);
+    final newFatigue = Map<String, double>.from(state.muscleGroupFatigue);
+    final newStates = Map<String, MuscleGroupState>.from(state.muscleGroupStates);
+    deltaPct.forEach((g, add) {
+      final v = (newFatigue[g] ?? 0.0) + add;
+      final capped = v.clamp(0.0, 100.0);
+      newFatigue[g] = capped;
+    });
+    // Update states based on thresholds 40/80
+    newFatigue.forEach((g, v) {
+      if (v >= 80) {
+        newStates[g] = MuscleGroupState.fatigued;
+      } else if (v >= 40) {
+        newStates[g] = MuscleGroupState.warm;
+      } else {
+        newStates[g] = MuscleGroupState.ready;
+      }
+    });
 
     state = state.copyWith(
       sessions: newSessions,
@@ -430,8 +469,8 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
       totalSets: newTotalSets,
       avatarLevel: newAvatarLevel,
       muscleGroupLevels: newMuscleGroupLevels,
-      muscleGroupFatigue: fatigueResult['fatigue'] as Map<String, double>,
-      muscleGroupStates: fatigueResult['states'] as Map<String, MuscleGroupState>,
+      muscleGroupFatigue: newFatigue,
+      muscleGroupStates: newStates,
     );
     
     // Save data after workout
@@ -654,10 +693,17 @@ class WorkoutDataNotifier extends StateNotifier<WorkoutData> {
       'states': newStates,
     };
   }
+  void addWeight(double value) {
+    final entries = List<WeightEntry>.from(state.weights)
+      ..add(WeightEntry(date: DateTime.now(), weight: value))
+      ..sort((a, b) => a.date.compareTo(b.date));
+    state = state.copyWith(weights: entries);
+    _saveData();
+  }
 }
 
 class LanguageNotifier extends StateNotifier<Locale> {
-  LanguageNotifier() : super(const Locale('en'));
+  LanguageNotifier() : super(const Locale('ja'));
 
   void setLanguage(String languageCode) {
     state = Locale(languageCode);
@@ -744,6 +790,13 @@ class AppLocalizations {
   String get pushDay => locale.languageCode == 'ja' ? 'プッシュデー' : 'Push Day';
   String get pullDay => locale.languageCode == 'ja' ? 'プルデー' : 'Pull Day';
   String get legDay => locale.languageCode == 'ja' ? 'レッグデー' : 'Leg Day';
+
+  // Weight tracking
+  String get weightTracking => locale.languageCode == 'ja' ? '体重トラッキング' : 'Weight Tracking';
+  String get enterWeightKg => locale.languageCode == 'ja' ? '体重 (kg) を入力' : 'Enter weight (kg)';
+  String get add => locale.languageCode == 'ja' ? '追加' : 'Add';
+  String get recentTrend => locale.languageCode == 'ja' ? '最近の推移' : 'Recent Trend';
+  String get noData => locale.languageCode == 'ja' ? 'データがありません' : 'No data yet';
   
   // Exercise list helper
   List<String> get exerciseList => [
@@ -780,8 +833,9 @@ class SimpleCycleAvatarApp extends ConsumerWidget {
     return MaterialApp(
       title: 'CycleAvatar - Simple Test',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+        textTheme: GoogleFonts.mPlusRounded1cTextTheme(),
       ),
       locale: locale,
       localizationsDelegates: const [
@@ -889,7 +943,7 @@ class HomeTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // アニメアバター表示カード
+          // アバター表示カード（2Dアバターへ差し替え、サイズ少し拡大）
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -897,25 +951,11 @@ class HomeTab extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'Your Avatar',
+                    l10n.avatar,
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 16),
-                  // アニメアバターウィジェット
-                  Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '🏋️ Avatar System\n(Simplified)',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ),
-                  ),
+                  const Avatar2DWidget(size: 220),
                   const SizedBox(height: 8),
                   Text(
                     'Level ${workoutData.avatarLevel.toStringAsFixed(1)}',
@@ -1392,72 +1432,478 @@ class _WorkoutTabState extends ConsumerState<WorkoutTab> {
   }
 }
 
-class AvatarTab extends ConsumerWidget {
+class AvatarTab extends ConsumerStatefulWidget {
   const AvatarTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AvatarTab> createState() => _AvatarTabState();
+}
+
+class _AvatarTabState extends ConsumerState<AvatarTab> {
+  final TextEditingController _weightController = TextEditingController();
+
+  @override
+  void dispose() {
+    _weightController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final workoutData = ref.watch(workoutDataProvider);
-    
+
+    final entries = workoutData.weights;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.avatar,
+            l10n.weightTracking,
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          Center(
-            child: Column(
-              children: [
-                const CircleAvatar(
-                  radius: 60,
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.person, size: 80, color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '${l10n.level} ${workoutData.avatarLevel.toStringAsFixed(1)}',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                Text('${(workoutData.avatarLevel * 100).toInt()} / ${((workoutData.avatarLevel.floor() + 1) * 100).toInt()} XP'),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: workoutData.avatarLevel % 1,
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                ),
-              ],
+          // Input card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _weightController,
+                      decoration: InputDecoration(
+                        labelText: l10n.enterWeightKg,
+                        border: const OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      final v = double.tryParse(_weightController.text);
+                      if (v != null && v > 0) {
+                        ref.read(workoutDataProvider.notifier).addWeight(v);
+                        _weightController.clear();
+                        setState(() {});
+                      }
+                    },
+                    child: Text(l10n.add),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
           Text(
-            l10n.muscleGroupLevels,
+            l10n.recentTrend,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 16),
-          ...workoutData.muscleGroupLevels.entries.map((entry) {
-            final localizedName = _getLocalizedMuscleGroupName(entry.key, l10n);
-            return MuscleGroupLevel(name: localizedName, level: entry.value);
-          }).toList(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: entries.isEmpty
+                    ? Center(child: Text(l10n.noData))
+                    : WeightLineChart(entries: entries),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  String _getLocalizedMuscleGroupName(String key, AppLocalizations l10n) {
-    switch (key) {
-      case 'Chest': return l10n.chest;
-      case 'Back': return l10n.back;
-      case 'Legs': return l10n.legs;
-      case 'Shoulders': return l10n.shoulders;
-      case 'Arms': return l10n.arms;
-      default: return key;
+class WeightLineChart extends StatefulWidget {
+  const WeightLineChart({super.key, required this.entries, this.targetWeight});
+  final List<WeightEntry> entries;
+  final double? targetWeight;
+
+  @override
+  State<WeightLineChart> createState() => _WeightLineChartState();
+}
+
+class _WeightLineChartState extends State<WeightLineChart> {
+  int? _hoveredIndex; // for tooltip (hover/tap)
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = widget.entries;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Compute layout and points mapping here
+        final padding = 36.0; // more space for labels
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final chartRect = Rect.fromLTWH(
+          padding,
+          padding + 12, // space under title (title is outside this widget)
+          size.width - padding * 2,
+          size.height - padding * 2 - 12,
+        );
+
+        // Determine Y ticks in 5kg steps
+        final weights = entries.isEmpty
+            ? <double>[0]
+            : entries.map((e) => e.weight).toList();
+        final minW0 = weights.reduce((a, b) => a < b ? a : b);
+        final maxW0 = weights.reduce((a, b) => a > b ? a : b);
+        double minW = (minW0 / 5).floor() * 5;
+        double maxW = (maxW0 / 5).ceil() * 5;
+        if (minW == maxW) maxW = minW + 5; // avoid zero range
+        final yTicks = <double>[];
+        for (double v = minW; v <= maxW + 0.001; v += 5) {
+          yTicks.add(double.parse(v.toStringAsFixed(0)));
+        }
+
+        // X: use index spacing, 6 ticks (like 9/1, 9/5,... example)
+        final count = entries.length;
+        final xTickCount = 6;
+        final xIndices = List.generate(xTickCount, (i) {
+          if (count == 0) return 0;
+          final pos = (i / (xTickCount - 1)) * (count - 1);
+          return pos.round().clamp(0, (count - 1));
+        });
+        final xLabels = xIndices.map((idx) {
+          if (entries.isEmpty) return '';
+          final d = entries[idx].date;
+          return '${d.month}/${d.day}';
+        }).toList();
+
+        // Map data points to pixel positions
+        final dy = maxW - minW;
+        double mapY(double w) => chartRect.bottom - (w - minW) / dy * chartRect.height;
+        double mapXIndex(int i) => chartRect.left + (count <= 1 ? 0 : (i / (count - 1)) * chartRect.width);
+        final points = List.generate(count, (i) => Offset(mapXIndex(i), mapY(entries[i].weight)));
+
+        // Target line default (nearest 5 to last value) if not provided
+        final target = widget.targetWeight ?? (entries.isNotEmpty ? ((entries.last.weight / 5).round() * 5).toDouble() : null);
+
+        // Handle hover/tap detection layer
+        void handlePointer(Offset localPos) {
+          if (entries.isEmpty) return;
+          // find nearest point within 24px radius
+          int bestIndex = 0;
+          double bestDist = double.infinity;
+          for (int i = 0; i < points.length; i++) {
+            final d = (points[i] - localPos).distance;
+            if (d < bestDist) {
+              bestDist = d;
+              bestIndex = i;
+            }
+          }
+          setState(() {
+            _hoveredIndex = (bestDist <= 24) ? bestIndex : null;
+          });
+        }
+
+        final painter = _WeightChartPainter(
+          chartRect: chartRect,
+          points: points,
+          yTicks: yTicks,
+          xTickIndices: xIndices,
+          xTickLabels: xLabels,
+          targetWeight: target,
+          hoveredIndex: _hoveredIndex,
+        );
+
+        // Tooltip widget
+        Widget buildTooltip() {
+          if (_hoveredIndex == null || entries.isEmpty) return const SizedBox.shrink();
+          final i = _hoveredIndex!;
+          final pt = points[i];
+          final e = entries[i];
+          final label = '${e.date.month}/${e.date.day} → ${e.weight.toStringAsFixed(1)}kg';
+          // Position bubble above the point
+          return Positioned(
+            left: (pt.dx - 60).clamp(0.0, size.width - 120),
+            top: (pt.dy - 48).clamp(0.0, size.height - 48),
+            child: _TooltipBubble(text: label),
+          );
+        }
+
+        return Stack(
+          children: [
+            // Background + Chart
+            CustomPaint(
+              painter: painter,
+              size: size,
+            ),
+            // Interaction layer
+            Positioned.fill(
+              child: MouseRegion(
+                onHover: (e) => handlePointer(e.localPosition),
+                onExit: (_) => setState(() => _hoveredIndex = null),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) => handlePointer(d.localPosition),
+                  onPanUpdate: (d) => handlePointer(d.localPosition),
+                  onTapUp: (_) => {},
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+            // Tooltip overlay
+            buildTooltip(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _WeightChartPainter extends CustomPainter {
+  _WeightChartPainter({
+    required this.chartRect,
+    required this.points,
+    required this.yTicks,
+    required this.xTickIndices,
+    required this.xTickLabels,
+    required this.targetWeight,
+    required this.hoveredIndex,
+  });
+
+  final Rect chartRect;
+  final List<Offset> points;
+  final List<double> yTicks;
+  final List<int> xTickIndices;
+  final List<String> xTickLabels;
+  final double? targetWeight;
+  final int? hoveredIndex;
+
+  static const Color lineColor = Color(0xFF4F9CF9); // bright blue
+  static const Color gridColor = Color(0xFFE5E7EB); // light gray
+  static const Color targetColor = Color(0xFF22C55E); // green
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Background
+    final bgRect = Offset.zero & size;
+    final bgPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFFFFFFF), Color(0xFFFAFAFF)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(bgRect);
+    canvas.drawRect(bgRect, bgPaint);
+
+    // Grid lines (dashed)
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    // Y grid lines + labels
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (final v in yTicks) {
+      final y = _mapY(v);
+      _drawDashedLine(canvas, Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint, dash: 6, gap: 6);
+      // label
+      final span = TextSpan(
+        text: v.toStringAsFixed(0),
+        style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+      );
+      textPainter.text = span;
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(chartRect.left - textPainter.width - 8, y - textPainter.height / 2));
+    }
+
+    // X grid lines + labels
+    for (int i = 0; i < xTickIndices.length; i++) {
+      final idx = xTickIndices[i];
+      final label = xTickLabels[i];
+      final x = _mapXIndex(idx);
+      _drawDashedLine(canvas, Offset(x, chartRect.top), Offset(x, chartRect.bottom), gridPaint, dash: 6, gap: 6);
+      final span = TextSpan(
+        text: label,
+        style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+      );
+      textPainter.text = span;
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(x - textPainter.width / 2, chartRect.bottom + 6));
+    }
+
+    // Axes (optional subtle)
+    final axisPaint = Paint()
+      ..color = const Color(0xFFCBD5E1)
+      ..strokeWidth = 1;
+    canvas.drawLine(Offset(chartRect.left, chartRect.bottom), Offset(chartRect.right, chartRect.bottom), axisPaint);
+    canvas.drawLine(Offset(chartRect.left, chartRect.top), Offset(chartRect.left, chartRect.bottom), axisPaint);
+
+    if (points.length < 1) return;
+
+    // Target line (dashed green)
+    if (targetWeight != null) {
+      final ty = _mapY(targetWeight!);
+      final targetPaint = Paint()
+        ..color = targetColor
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+      _drawDashedLine(canvas, Offset(chartRect.left, ty), Offset(chartRect.right, ty), targetPaint, dash: 8, gap: 6);
+    }
+
+    // Smooth path using Catmull-Rom like cubic smoothing
+    final path = _smoothPath(points);
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, linePaint);
+
+    // Data points
+    for (int i = 0; i < points.length; i++) {
+      final p = points[i];
+      final fill = Paint()..color = lineColor;
+      final stroke = Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(p, 3.5, fill);
+      canvas.drawCircle(p, 3.5, stroke);
+    }
+
+    // Highlight hovered point
+    if (hoveredIndex != null && hoveredIndex! >= 0 && hoveredIndex! < points.length) {
+      final p = points[hoveredIndex!];
+      final halo = Paint()
+        ..color = lineColor.withOpacity(0.2)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(p, 10, halo);
     }
   }
+
+  // Map helpers based on chartRect and yTicks
+  double _mapY(double value) {
+    final minY = yTicks.first;
+    final maxY = yTicks.last;
+    final dy = maxY - minY;
+    return chartRect.bottom - ((value - minY) / dy) * chartRect.height;
+  }
+
+  double _mapXIndex(int i) {
+    if (points.length <= 1) return chartRect.left;
+    return chartRect.left + (i / (points.length - 1)) * chartRect.width;
+  }
+
+  // Draw dashed line helper
+  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint, {double dash = 5, double gap = 5}) {
+    final total = (end - start).distance;
+    final direction = (end - start) / total;
+    double traveled = 0;
+    while (traveled < total) {
+      final s = start + direction * traveled;
+      final e = start + direction * (traveled + dash).clamp(0, total);
+      canvas.drawLine(s, e, paint);
+      traveled += dash + gap;
+    }
+  }
+
+  // Create a smooth path from given points
+  Path _smoothPath(List<Offset> pts) {
+    if (pts.length < 2) {
+      return Path()..addPolygon(pts, false);
+    }
+    final path = Path();
+    path.moveTo(pts.first.dx, pts.first.dy);
+
+    for (int i = 0; i < pts.length - 1; i++) {
+      final p0 = i == 0 ? pts[i] : pts[i - 1];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+
+      final cp1 = Offset(
+        p1.dx + (p2.dx - p0.dx) / 6,
+        p1.dy + (p2.dy - p0.dy) / 6,
+      );
+      final cp2 = Offset(
+        p2.dx - (p3.dx - p1.dx) / 6,
+        p2.dy - (p3.dy - p1.dy) / 6,
+      );
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
+    }
+
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeightChartPainter old) {
+    return old.points != points ||
+        old.yTicks != yTicks ||
+        old.xTickLabels != xTickLabels ||
+        old.targetWeight != targetWeight ||
+        old.hoveredIndex != hoveredIndex ||
+        old.chartRect != chartRect;
+  }
+}
+
+class _TooltipBubble extends StatelessWidget {
+  const _TooltipBubble({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: ShapeDecoration(
+          color: const Color(0xFF111827),
+          shape: _BubbleBorder(radius: 8),
+          shadows: [
+            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8),
+          ],
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11.5,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BubbleBorder extends ShapeBorder {
+  const _BubbleBorder({this.radius = 8});
+  final double radius;
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => getOuterPath(rect);
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
+    const tailWidth = 8.0;
+    const tailHeight = 6.0;
+    final r = Radius.circular(radius);
+    final path = Path()..addRRect(RRect.fromRectAndRadius(rect, r));
+    // Tail centered at bottom
+    final tailPath = Path()
+      ..moveTo(rect.center.dx - tailWidth / 2, rect.bottom)
+      ..lineTo(rect.center.dx, rect.bottom + tailHeight)
+      ..lineTo(rect.center.dx + tailWidth / 2, rect.bottom)
+      ..close();
+    return Path.combine(PathOperation.union, path, tailPath);
+  }
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {}
+
+  @override
+  ShapeBorder scale(double t) => _BubbleBorder(radius: radius * t);
 }
 
 class MuscleGroupLevel extends StatelessWidget {
@@ -1633,22 +2079,6 @@ class SettingsTab extends ConsumerWidget {
               leading: const Icon(Icons.notifications),
               title: Text(l10n.notifications),
               subtitle: Text(l10n.recoveryAlerts),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.accessibility),
-              title: Text(l10n.accessibility),
-              subtitle: Text(l10n.screenReaderVoiceInput),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.download),
-              title: Text(l10n.exportData),
-              subtitle: Text(l10n.downloadTrainingData),
               trailing: const Icon(Icons.chevron_right),
             ),
           ),
